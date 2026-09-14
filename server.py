@@ -136,6 +136,7 @@ def visualizer():
     return send_from_directory('static', 'visualizer.html')
 
 if __name__ == '__main__':
-    # Run the server on all interfaces so Roblox can hit it if necessary
-    # Hugging Face Spaces requires apps to run on port 7860
-    app.run(host='0.0.0.0', port=7860, debug=False)
+    # Render assigns a dynamic port via the PORT environment variable.
+    # Default to 10000 if not set.
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port, debug=False)
