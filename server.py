@@ -103,7 +103,7 @@ def talk_to_fly():
         ai_output = completion.choices[0].message.content.strip()
     except Exception as e:
         print("Groq API Error:", e)
-        ai_output = "Bzz... My cloud connection is severed."
+        ai_output = f"Bzz... Groq Error: {str(e)}"
     
     # Ensure it doesn't cut off mid-sentence if it hits the token limit
     if not ai_output.endswith(('.', '!', '?', '"')):
