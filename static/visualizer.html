@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fly Brain Connectome Explorer</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #0d1117; color: #c9d1d9; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+        #3d-graph { width: 100vw; height: 100vh; }
+        #ui-panel { position: absolute; top: 20px; left: 20px; background: rgba(22, 27, 34, 0.8); padding: 20px; border-radius: 12px; border: 1px solid #30363d; z-index: 10; max-width: 300px;}
+        h1 { margin-top: 0; font-size: 1.2rem; color: #58a6ff; }
+        p { font-size: 0.9rem; color: #8b949e; }
+        .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 0.85rem; }
+        .color-box { width: 12px; height: 12px; border-radius: 50%; margin-right: 10px; }
+    </style>
+    <script src="https://unpkg.com/3d-force-graph"></script>
+</head>
+<body>
+    <div id="ui-panel">
+        <h1>130k Fly Brain Explorer</h1>
+        <p>Visualizing a 5,000-neuron sub-graph of the biological connectome.</p>
+        <div class="legend-item"><div class="color-box" style="background: #ff3366;"></div> Sensory Neurons</div>
+        <div class="legend-item"><div class="color-box" style="background: #aaaaaa;"></div> Interneurons</div>
+        <div class="legend-item"><div class="color-box" style="background: #33ccff;"></div> Motor Neurons</div>
+    </div>
+    <div id="3d-graph"></div>
+
+    <script>
+        fetch('/static/graph_data.json')
+            .then(res => res.json())
+            .then(data => {
+                const Graph = ForceGraph3D()
+                (document.getElementById('3d-graph'))
+                    .graphData(data)
+                    .nodeLabel(node => `${node.group} Neuron (ID: ${node.id})`)
+                    .nodeColor(node => node.color)
+                    .nodeRelSize(4)
+                    .linkColor(() => 'rgba(255,255,255,0.1)')
+                    .linkWidth(0.5)
+                    .backgroundColor('#0d1117');
+                
+                Graph.renderer().setClearColor(0x0d1117, 1);
+            });
+    </script>
+</body>
+</html>
