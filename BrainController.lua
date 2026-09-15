@@ -227,6 +227,8 @@ task.spawn(function()
 			currentTurnLeft = motor.turn_left
 			currentTurnRight = motor.turn_right
 			
+			print(string.format("Neural Output - Move: %.4f | TurnL: %.4f | TurnR: %.4f", currentMoveForward, currentTurnLeft, currentTurnRight))
+			
 			-- Render hologram of the active neural pathways
 			pcall(function() renderBrainHologram(active_neurons, Head) end)
 		end

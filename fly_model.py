@@ -20,6 +20,9 @@ class FlyBrainNetwork(nn.Module):
         self.input_dim = input_dim
         self.output_dim = output_dim
         
+        # Maintain a continuous state of consciousness/electricity
+        self.register_buffer('current_state', torch.zeros(1, num_nodes))
+        
     def get_maturity(self):
         """
         Returns a maturity level based on total synaptic density/weight.
@@ -52,7 +55,11 @@ class FlyBrainNetwork(nn.Module):
         batch_size = x.shape[0]
         device = x.device
         
-        neuron_states = torch.zeros(batch_size, self.num_nodes, device=device)
+        # Continue from previous state (with slight decay so it doesn't explode)
+        if self.current_state.device != device or self.current_state.shape[0] != batch_size:
+            self.current_state = torch.zeros(batch_size, self.num_nodes, device=device)
+            
+        neuron_states = self.current_state * 0.8
         neuron_states[:, :self.input_dim] = x
         
         indices = self.edge_index.to(device)
@@ -76,5 +83,8 @@ class FlyBrainNetwork(nn.Module):
         # We increase weights aggressively to simulate synaptogenesis and physical growth
         with torch.no_grad():
             self.edge_weights.data += 0.005 * torch.rand_like(self.edge_weights)
+            
+        # Save the continuous state
+        self.current_state = neuron_states.detach()
             
         return motor_signals, neuron_states
