@@ -7,6 +7,9 @@ import torch
 from groq import Groq
 from data_loader import get_connectome_graph, get_edge_index_from_graph
 from fly_model import FlyBrainNetwork
+import threading
+import time
+import subprocess
 
 app = Flask(__name__)
 
@@ -192,7 +195,34 @@ def talk_to_fly():
 def visualizer():
     return send_from_directory('static', 'visualizer.html')
 
+def auto_backup_task():
+    print("Starting auto-backup background thread...")
+    while True:
+        # Sleep for 24 hours (86400 seconds)
+        time.sleep(86400)
+        
+        token = os.environ.get("GITHUB_TOKEN")
+        if not token:
+            print("GITHUB_TOKEN not found in environment. Skipping backup.")
+            continue
+            
+        print("Running automatic brain backup to GitHub...")
+        try:
+            repo_url = f"https://{token}@github.com/OyasumiOnoderaPunpun/fly-brain.git"
+            subprocess.run(["git", "config", "user.email", "flybrain@render.com"], check=False)
+            subprocess.run(["git", "config", "user.name", "Fly Brain Auto-Backup"], check=False)
+            subprocess.run(["git", "remote", "set-url", "origin", repo_url], check=False)
+            subprocess.run(["git", "add", "brain_state.pt", "memory.json"], check=False)
+            subprocess.run(["git", "commit", "-m", "Auto-backup continuous brain state and memory"], check=False)
+            subprocess.run(["git", "push", "origin", "main"], check=False)
+            print("Successfully backed up to GitHub!")
+        except Exception as e:
+            print(f"Failed to backup to GitHub: {e}")
+
 if __name__ == '__main__':
+    # Start the backup thread
+    threading.Thread(target=auto_backup_task, daemon=True).start()
+    
     # Render assigns a dynamic port via the PORT environment variable.
     # Default to 10000 if not set.
     port = int(os.environ.get("PORT", 10000))

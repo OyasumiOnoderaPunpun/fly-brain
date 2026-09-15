@@ -240,12 +240,14 @@ RunService.Heartbeat:Connect(function(dt)
 	
 	-- The neural network uses ReLU, so values are 0 to positive infinity.
 	-- We interpret the raw motor neuron firing rates as physical forces.
-	local turnSpeed = (currentTurnLeft - currentTurnRight) * 3
-	local moveSpeed = currentMoveForward * 5
+	-- The neural network outputs very small raw firing rates initially (e.g. 0.001)
+	-- We amplify these significantly to map them to Roblox physics.
+	local turnSpeed = (currentTurnLeft - currentTurnRight) * 5000
+	local moveSpeed = currentMoveForward * 10000
 	
 	-- Cap maximum biological limits
-	turnSpeed = math.clamp(turnSpeed, -5, 5)
-	moveSpeed = math.clamp(moveSpeed, -2, 10)
+	turnSpeed = math.clamp(turnSpeed, -15, 15)
+	moveSpeed = math.clamp(moveSpeed, -5, 25)
 	
 	-- Apply movement (CFrame)
 	Head.CFrame = Head.CFrame * CFrame.Angles(0, math.rad(turnSpeed * 60 * dt), 0)
