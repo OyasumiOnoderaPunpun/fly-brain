@@ -95,7 +95,7 @@ def talk_to_fly():
     # Generate a response using Groq
     try:
         completion = client.chat.completions.create(
-            model="mixtral-8x7b-32768",
+            model=selected_model,
             messages=chat_histories[player_name],
             temperature=0.7,
             max_completion_tokens=80,
