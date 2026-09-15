@@ -83,6 +83,11 @@ class FlyBrainNetwork(nn.Module):
         # We increase weights aggressively to simulate synaptogenesis and physical growth
         with torch.no_grad():
             self.edge_weights.data += 0.005 * torch.rand_like(self.edge_weights)
+            # Homeostatic plasticity: Cap the maximum synapse strength so the brain doesn't literally explode
+            self.edge_weights.data = torch.clamp(self.edge_weights.data, -1.0, 1.0)
+            
+        # Cap the maximum electrical charge a neuron can hold
+        neuron_states = torch.clamp(neuron_states, 0.0, 100.0)
             
         # Save the continuous state
         self.current_state = neuron_states.detach()
