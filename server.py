@@ -17,8 +17,8 @@ print("Initializing Fly Brain connectome...")
 G = get_connectome_graph(num_nodes=130000)
 edge_index = get_edge_index_from_graph(G)
 
-# Input: 5 (vision_fwd, vision_left, vision_right, player_dist, chat_sentiment), Output: 4 (move_fwd, turn_left, turn_right, talk_urge)
-fly_brain = FlyBrainNetwork(num_nodes=130000, edge_index=edge_index, input_dim=5, output_dim=4)
+# Input: 7 (vision_fwd, left, right, up, down, player, sentiment), Output: 7 (fwd, up, down, yaw, pitch, roll, talk)
+fly_brain = FlyBrainNetwork(num_nodes=130000, edge_index=edge_index, input_dim=7, output_dim=7)
 fly_brain.load_state("brain_state.pt")
 
 
@@ -75,14 +75,14 @@ if os.path.exists("memory.json"):
         chat_histories = json.load(f)
         print(f"Loaded memory for {len(chat_histories)} players.")
 
-# The fly's motor outputs map to physical actions now, not ideologies.
-# 0: move_forward, 1: turn_left, 2: turn_right, 3: talk_urge
+# The fly's motor outputs map to physical 6DOF actions now
+# 0: move_fwd, 1: move_up, 2: move_down, 3: yaw, 4: pitch, 5: roll, 6: talk_urge
 
 @app.route('/tick', methods=['POST'])
 def tick():
     """
     High-frequency endpoint for physical simulation.
-    Expects JSON: { "vision_fwd": float, "vision_left": float, "vision_right": float, "player_dist": float }
+    Expects JSON: { "vision_fwd": float, "vision_left": float, "vision_right": float, "vision_up": float, "vision_down": float, "player_dist": float }
     """
     data = request.json
     if not data:
@@ -92,10 +92,12 @@ def tick():
     vision_fwd = data.get("vision_fwd", 1.0)
     vision_left = data.get("vision_left", 1.0)
     vision_right = data.get("vision_right", 1.0)
+    vision_up = data.get("vision_up", 1.0)
+    vision_down = data.get("vision_down", 1.0)
     player_dist = data.get("player_dist", 1.0)
     chat_sentiment = 0.0 # No chat in tick
     
-    sensory_tensor = torch.tensor([[vision_fwd, vision_left, vision_right, player_dist, chat_sentiment]], dtype=torch.float32)
+    sensory_tensor = torch.tensor([[vision_fwd, vision_left, vision_right, vision_up, vision_down, player_dist, chat_sentiment]], dtype=torch.float32)
     
     with torch.no_grad():
         motor_signals, neuron_states = fly_brain(sensory_tensor)
@@ -106,9 +108,12 @@ def tick():
     return jsonify({
         "motor": {
             "move_forward": motor_signals[0],
-            "turn_left": motor_signals[1],
-            "turn_right": motor_signals[2],
-            "talk_urge": motor_signals[3]
+            "move_up": motor_signals[1],
+            "move_down": motor_signals[2],
+            "yaw": motor_signals[3],
+            "pitch": motor_signals[4],
+            "roll": motor_signals[5],
+            "talk_urge": motor_signals[6]
         },
         "active_neurons": top_neurons
     })
@@ -127,7 +132,7 @@ def talk_to_fly():
     sentiment = TextBlob(chat_message).sentiment.polarity
     print(f"Sensory input (Sentiment): {sentiment}")
     
-    sensory_tensor = torch.tensor([[1.0, 1.0, 1.0, 1.0, sentiment]], dtype=torch.float32)
+    sensory_tensor = torch.tensor([[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, sentiment]], dtype=torch.float32)
     
     # 2. Brain Processing: Pass it through the connectome graph
     with torch.no_grad():

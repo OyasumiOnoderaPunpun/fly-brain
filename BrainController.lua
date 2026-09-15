@@ -170,14 +170,19 @@ end
 
 -- PHYSICAL BODY SIMULATION
 local currentMoveForward = 0
-local currentTurnLeft = 0
-local currentTurnRight = 0
+local currentMoveUp = 0
+local currentMoveDown = 0
+local currentYaw = 0
+local currentPitch = 0
+local currentRoll = 0
 
-local function getFlyBrainTick(vision_fwd, vision_left, vision_right, player_dist)
+local function getFlyBrainTick(vision_fwd, vision_left, vision_right, vision_up, vision_down, player_dist)
 	local payload = {
 		["vision_fwd"] = vision_fwd,
 		["vision_left"] = vision_left,
 		["vision_right"] = vision_right,
+		["vision_up"] = vision_up,
+		["vision_down"] = vision_down,
 		["player_dist"] = player_dist
 	}
 	
@@ -208,6 +213,14 @@ task.spawn(function()
 		local rightRay = workspace:Raycast(Head.Position, Head.CFrame.RightVector * 10)
 		local vision_right = rightRay and (rightRay.Position - Head.Position).Magnitude / 10 or 1.0
 		
+		-- Raycast up
+		local upRay = workspace:Raycast(Head.Position, Head.CFrame.UpVector * 10)
+		local vision_up = upRay and (upRay.Position - Head.Position).Magnitude / 10 or 1.0
+		
+		-- Raycast down
+		local downRay = workspace:Raycast(Head.Position, -Head.CFrame.UpVector * 10)
+		local vision_down = downRay and (downRay.Position - Head.Position).Magnitude / 10 or 1.0
+		
 		-- Nearest player dist (Sensory Proximity)
 		local nearestDist = 100
 		for _, player in ipairs(Players:GetPlayers()) do
@@ -221,13 +234,14 @@ task.spawn(function()
 		local player_dist = nearestDist / 100 -- normalize 0-1
 		
 		-- Send senses to the biological connectome
-		local motor, active_neurons = getFlyBrainTick(vision_fwd, vision_left, vision_right, player_dist)
+		local motor, active_neurons = getFlyBrainTick(vision_fwd, vision_left, vision_right, vision_up, vision_down, player_dist)
 		if motor then
 			currentMoveForward = motor.move_forward
-			currentTurnLeft = motor.turn_left
-			currentTurnRight = motor.turn_right
-			
-			print(string.format("Neural Output - Move: %.4f | TurnL: %.4f | TurnR: %.4f", currentMoveForward, currentTurnLeft, currentTurnRight))
+			currentMoveUp = motor.move_up
+			currentMoveDown = motor.move_down
+			currentYaw = motor.yaw
+			currentPitch = motor.pitch
+			currentRoll = motor.roll
 			
 			-- Render hologram of the active neural pathways
 			pcall(function() renderBrainHologram(active_neurons, Head) end)
@@ -238,26 +252,32 @@ end)
 RunService.Heartbeat:Connect(function(dt)
 	if not Head or not Head.Anchored then return end
 	
-	-- The neural network uses ReLU, so values are 0 to positive infinity.
-	-- We interpret the raw motor neuron firing rates as physical forces.
-	-- The neural network outputs very small raw firing rates initially (e.g. 0.001)
+	-- The neural network outputs very small raw firing rates initially
 	-- We amplify these significantly to map them to Roblox physics.
-	local turnSpeed = (currentTurnLeft - currentTurnRight) * 5000
-	local moveSpeed = currentMoveForward * 10000
+	-- We treat the single outputs as bidirectional if we subtract them, but for pitch/yaw/roll we just use the raw value since it can swing both ways via noise,
+	-- Wait, ReLU only outputs positive numbers! So we must offset them, or the neural net will only turn right and pitch up.
+	-- Let's offset the raw ReLU by its mean or just subtract a baseline (e.g. 0.05 * multiplier) so it can go negative.
+	local yawSpeed = (currentYaw - 0.05) * 5000
+	local pitchSpeed = (currentPitch - 0.05) * 5000
+	local rollSpeed = (currentRoll - 0.05) * 5000
+	
+	local moveZ = (currentMoveForward - 0.05) * 10000 -- Forward/Back
+	local moveY = (currentMoveUp - currentMoveDown) * 10000 -- Up/Down
 	
 	-- Cap maximum biological limits
-	turnSpeed = math.clamp(turnSpeed, -15, 15)
-	moveSpeed = math.clamp(moveSpeed, -5, 25)
+	yawSpeed = math.clamp(yawSpeed, -15, 15)
+	pitchSpeed = math.clamp(pitchSpeed, -15, 15)
+	rollSpeed = math.clamp(rollSpeed, -15, 15)
+	moveZ = math.clamp(moveZ, -10, 25)
+	moveY = math.clamp(moveY, -15, 15)
 	
-	-- Apply movement (CFrame)
-	Head.CFrame = Head.CFrame * CFrame.Angles(0, math.rad(turnSpeed * 60 * dt), 0)
-	Head.CFrame = Head.CFrame * CFrame.new(0, 0, -moveSpeed * dt)
+	-- Apply movement (6DOF CFrame)
+	-- Angles in X (pitch), Y (yaw), Z (roll)
+	Head.CFrame = Head.CFrame * CFrame.Angles(math.rad(pitchSpeed * 60 * dt), math.rad(-yawSpeed * 60 * dt), math.rad(rollSpeed * 60 * dt))
+	Head.CFrame = Head.CFrame * CFrame.new(0, moveY * dt, -moveZ * dt)
 	
-	-- Hover logic (keep it bouncing slightly)
-	local currentPos = Head.Position
-	if currentPos.Y < 4 then
-		Head.CFrame = Head.CFrame + Vector3.new(0, (4 - currentPos.Y) * dt, 0)
-	elseif currentPos.Y > 7 then
-		Head.CFrame = Head.CFrame + Vector3.new(0, (7 - currentPos.Y) * dt, 0)
+	-- Optional: If the fly hits the ground, don't let it clip through
+	if Head.Position.Y < 1 then
+		Head.CFrame = Head.CFrame - Vector3.new(0, Head.Position.Y - 1, 0)
 	end
 end)

@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class FlyBrainNetwork(nn.Module):
-    def __init__(self, num_nodes, edge_index, input_dim=1, output_dim=4, num_forward_steps=3):
+    def __init__(self, num_nodes, edge_index, input_dim=7, output_dim=7, num_forward_steps=3):
         """
         A PyTorch module structured around a static connectome graph.
         input_dim = 1 (Sentiment score of the chat message: -1.0 to 1.0)
@@ -43,8 +43,11 @@ class FlyBrainNetwork(nn.Module):
     def load_state(self, filepath="brain_state.pt"):
         import os
         if os.path.exists(filepath):
-            self.load_state_dict(torch.load(filepath))
-            print(f"Loaded biological memory from {filepath}. Maturity: Phase {self.get_maturity()}")
+            try:
+                self.load_state_dict(torch.load(filepath))
+                print(f"Loaded biological memory from {filepath}. Maturity: Phase {self.get_maturity()}")
+            except Exception as e:
+                print(f"Failed to load memory (likely architecture change): {e}. Starting fresh.")
         else:
             print("No previous biological memory found. Starting fresh.")
         
