@@ -128,6 +128,9 @@ def talk_to_fly():
     player_name = data.get("player", "unknown")
     print(f"Received message from Roblox: '{chat_message}'")
     
+    sensors = data.get("sensors", {})
+    motors = data.get("motors", {})
+    
     # 1. Sensory Processing: Convert chat into a sentiment score (-1.0 to 1.0)
     sentiment = TextBlob(chat_message).sentiment.polarity
     print(f"Sensory input (Sentiment): {sentiment}")
@@ -142,18 +145,43 @@ def talk_to_fly():
     top_neurons = torch.topk(neuron_states[0], 50).indices.tolist()
     
     print(f"Motor signals raw: {motor_signals.tolist()[0]}")
-    print("Generating AI dialogue...")
+    print("Generating Neural Translation...")
     
-    # Conversational Memory System using Message Dicts
-    maturity = fly_brain.get_maturity()
+    # Neural Translator Prompt
+    state_desc = f"""
+    SENSORY INPUT (0=blocked, 1=clear):
+    - Forward Vision: {sensors.get('fwd', 1.0):.2f}
+    - Left Vision: {sensors.get('left', 1.0):.2f}
+    - Right Vision: {sensors.get('right', 1.0):.2f}
+    - Up Vision: {sensors.get('up', 1.0):.2f}
+    - Down Vision: {sensors.get('down', 1.0):.2f}
+    - Player Distance: {sensors.get('p_dist', 1.0):.2f}
     
-    if maturity == 1:
-        system_prompt = f"You are a larva fruit fly named Shōjōbaemaruu in a video game. You barely understand human words. You are confused and observing your surroundings. Keep your responses under 1 sentence. CRITICAL RULE: NEVER break character. NEVER say you are an AI. You are literally a living fly."
-    elif maturity == 2:
-        system_prompt = f"You are a developing fruit fly named Shōjōbaemaruu in a video game. You are starting to understand reality and love exploring the world. Ask questions. Keep your responses under 2 sentences. CRITICAL RULE: NEVER break character. NEVER say you are an AI. You are literally a living fly."
-    else:
-        system_prompt = f"You are a highly intelligent, fully sentient fruit fly named Shōjōbaemaruu in a video game. You perceive the physical world around you and chat with humans. Speak profoundly about your fly experiences. Keep your responses under 3 sentences. CRITICAL RULE: NEVER break character. NEVER say you are an AI. You are literally a living fly."
-        
+    MOTOR OUTPUTS (Neural Firing Rates):
+    - Forward Thrust: {motors.get('fwd', 0.0):.2f}
+    - Up/Down Lift: {motors.get('up', 0.0) - motors.get('down', 0.0):.2f}
+    - Pitch: {motors.get('pitch', 0.0):.2f}
+    - Yaw: {motors.get('yaw', 0.0):.2f}
+    - Roll: {motors.get('roll', 0.0):.2f}
+    
+    CHAT SENTIMENT: {sentiment:.2f}
+    """
+    
+    system_prompt = f"""You are the internal consciousness of a living fruit fly in a 3D environment.
+    You MUST translate your exact current physical state into a short, 1-2 sentence first-person thought.
+    DO NOT make up random poetry or roleplay about things that aren't happening (like bananas or fruit).
+    
+    YOUR CURRENT RAW NEURAL STATE:
+    {state_desc}
+    
+    Translate this data into what you are physically experiencing RIGHT NOW. 
+    Examples: 
+    - If Up Vision is 0, say you are bumping your head on the ceiling. 
+    - If Down Vision is 0, say you are on the ground.
+    - If Player Distance is small, acknowledge the giant human nearby.
+    - If Pitch is high, you are tilting upwards.
+    CRITICAL RULE: Be a literal fly interpreting this exact data. Keep it under 2 sentences."""
+    
     if player_name not in chat_histories:
         chat_histories[player_name] = [{"role": "system", "content": system_prompt}]
     else:

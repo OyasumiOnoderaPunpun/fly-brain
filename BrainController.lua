@@ -105,11 +105,17 @@ local function appendToAuditLog(text)
 	end
 end
 
+-- Variables to track the fly's current physical state for the LLM translator
+local latestSensors = { fwd = 1.0, left = 1.0, right = 1.0, up = 1.0, down = 1.0, p_dist = 1.0 }
+local latestMotors = { fwd = 0, up = 0, down = 0, yaw = 0, pitch = 0, roll = 0 }
+
 -- Function to ping the Python Brain
 local function getFlyBrainResponse(message, playerName)
 	local payload = {
 		["message"] = message,
-		["player"] = playerName
+		["player"] = playerName,
+		["sensors"] = latestSensors,
+		["motors"] = latestMotors
 	}
 	
 	local success, response = pcall(function()
@@ -298,6 +304,14 @@ task.spawn(function()
 		end
 		local player_dist = nearestDist / 100 -- normalize 0-1
 		
+		-- Save for the LLM translator
+		latestSensors.fwd = vision_fwd
+		latestSensors.left = vision_left
+		latestSensors.right = vision_right
+		latestSensors.up = vision_up
+		latestSensors.down = vision_down
+		latestSensors.p_dist = player_dist
+		
 		-- Send senses to the biological connectome
 		local motor, active_neurons = getFlyBrainTick(vision_fwd, vision_left, vision_right, vision_up, vision_down, player_dist)
 		if motor then
@@ -307,6 +321,13 @@ task.spawn(function()
 			currentYaw = motor.yaw
 			currentPitch = motor.pitch
 			currentRoll = motor.roll
+			
+			latestMotors.fwd = currentMoveForward
+			latestMotors.up = currentMoveUp
+			latestMotors.down = currentMoveDown
+			latestMotors.yaw = currentYaw
+			latestMotors.pitch = currentPitch
+			latestMotors.roll = currentRoll
 			
 			-- Render hologram of the active neural pathways
 			pcall(function() renderBrainHologram(active_neurons, Head) end)
