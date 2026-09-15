@@ -103,16 +103,7 @@ def talk_to_fly():
         ai_output = completion.choices[0].message.content.strip()
     except Exception as e:
         print("Groq API Error:", e)
-        ai_output = f"Bzz... Groq Error: {str(e)}"
-    
-    # Ensure it doesn't cut off mid-sentence if it hits the token limit
-    if not ai_output.endswith(('.', '!', '?', '"')):
-        # Find the last punctuation mark and cut it there
-        last_punct = max(ai_output.rfind('.'), ai_output.rfind('!'), ai_output.rfind('?'))
-        if last_punct != -1:
-            ai_output = ai_output[:last_punct+1]
-        else:
-            ai_output = ai_output + "..."
+        ai_output = f"Groq Error: {str(e)}"
     
     # Save assistant reply to history
     chat_histories[player_name].append({"role": "assistant", "content": ai_output})
