@@ -23,12 +23,17 @@ print("Initializing Groq API Client...")
 # This expects the GROQ_API_KEY environment variable to be set
 client = Groq()
 
-import requests
+import urllib.request
+import json
 try:
-    headers = {"Authorization": f"Bearer {os.environ.get('GROQ_API_KEY')}"}
-    resp = requests.get("https://api.groq.com/openai/v1/models", headers=headers)
-    models_data = resp.json()
+    req = urllib.request.Request(
+        "https://api.groq.com/openai/v1/models",
+        headers={"Authorization": f"Bearer {os.environ.get('GROQ_API_KEY')}"}
+    )
+    with urllib.request.urlopen(req) as response:
+        models_data = json.loads(response.read().decode())
     model_ids = [m['id'] for m in models_data.get('data', [])]
+
     
     selected_model = None
     for m in model_ids:
