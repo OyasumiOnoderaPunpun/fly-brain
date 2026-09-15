@@ -98,12 +98,12 @@ def talk_to_fly():
             model=selected_model,
             messages=chat_histories[player_name],
             temperature=0.7,
-            max_completion_tokens=80,
+            max_tokens=80,
         )
         ai_output = completion.choices[0].message.content.strip()
     except Exception as e:
         print("Groq API Error:", e)
-        ai_output = "*buzzes confusedly* (My brain is offline)"
+        ai_output = f"DEBUG Groq Error: {str(e)}"
     
     # Save assistant reply to history
     chat_histories[player_name].append({"role": "assistant", "content": ai_output})
