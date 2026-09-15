@@ -23,31 +23,40 @@ print("Initializing Groq API Client...")
 # This expects the GROQ_API_KEY environment variable to be set
 client = Groq()
 
-import urllib.request
-import json
+# Auto-detect an available Groq model using the native SDK
+selected_model = None
 try:
-    req = urllib.request.Request(
-        "https://api.groq.com/openai/v1/models",
-        headers={"Authorization": f"Bearer {os.environ.get('GROQ_API_KEY')}"}
-    )
-    with urllib.request.urlopen(req) as response:
-        models_data = json.loads(response.read().decode())
-    model_ids = [m['id'] for m in models_data.get('data', [])]
-
+    models_page = client.models.list()
+    model_ids = [m.id for m in models_page.data]
+    print("Available Groq Models:", model_ids)
     
-    selected_model = None
+    # Prioritize Qwen since the user liked it
     for m in model_ids:
-        if 'llama' in m.lower():
+        if 'qwen' in m.lower():
             selected_model = m
             break
+    
+    # Fallback to Llama
+    if not selected_model:
+        for m in model_ids:
+            if 'llama' in m.lower():
+                selected_model = m
+                break
+                
+    # Fallback to anything not whisper
+    if not selected_model:
+        for m in model_ids:
+            if 'whisper' not in m.lower():
+                selected_model = m
+                break
+                
     if not selected_model and len(model_ids) > 0:
         selected_model = model_ids[0]
 except Exception as e:
     print("Auto-detect failed:", e)
-    selected_model = "llama-3.3-70b-versatile"
 
 if not selected_model:
-    selected_model = "llama-3.3-70b-versatile"
+    selected_model = "qwen/qwen3.6-27b"
     
 print(f"Using Groq model: {selected_model}")
 
