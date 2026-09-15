@@ -3,9 +3,12 @@
 
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
+local TextService = game:GetService("TextService")
+local RunService = game:GetService("RunService")
 
--- The URL to our local Python server running the PyTorch Fly Brain
-local FLY_BRAIN_URL = "http://127.0.0.1:5000/talk"
+-- The URL to our live Python server running the PyTorch Fly Brain
+local FLY_BRAIN_URL = "https://fly-brain.onrender.com/talk"
+local TICK_URL = "https://fly-brain.onrender.com/tick"
 
 local FlyNPC = script.Parent
 local Head
@@ -126,18 +129,32 @@ local function onPlayerAdded(player)
 				local brainAction, active_neurons = getFlyBrainResponse(message, player.Name)
 				print("Brain Action received: " .. tostring(brainAction))
 				
+				-- Filter the AI response through Roblox's Text Filter
+				local filteredAction = brainAction
+				local successFilter, filterResult = pcall(function()
+					local textFilterResult = TextService:FilterStringAsync(brainAction, player.UserId)
+					return textFilterResult:GetNonChatStringForBroadcastAsync()
+				end)
+				
+				if successFilter and filterResult then
+					filteredAction = filterResult
+				else
+					-- Fallback to hashes if filtering fails
+					filteredAction = string.rep("#", math.min(string.len(brainAction), 50))
+				end
+				
 				-- Render the active neurons in the physical world!
 				renderBrainHologram(active_neurons, Head)
 				
 				-- Use modern TextChatService to display the bubble over the part
 				local TextChatService = game:GetService("TextChatService")
 				pcall(function()
-					TextChatService:DisplayBubble(Head, brainAction)
+					TextChatService:DisplayBubble(Head, filteredAction)
 				end)
 				
 				-- Fallback to Legacy Chat just in case BubbleChat is disabled
 				pcall(function()
-					game:GetService("Chat"):Chat(Head, brainAction, Enum.ChatColor.White)
+					game:GetService("Chat"):Chat(Head, filteredAction, Enum.ChatColor.White)
 				end)
 			end
 		end
@@ -150,3 +167,93 @@ Players.PlayerAdded:Connect(onPlayerAdded)
 for _, player in ipairs(Players:GetPlayers()) do
 	onPlayerAdded(player)
 end
+
+-- PHYSICAL BODY SIMULATION
+local currentMoveForward = 0
+local currentTurnLeft = 0
+local currentTurnRight = 0
+
+local function getFlyBrainTick(vision_fwd, vision_left, vision_right, player_dist)
+	local payload = {
+		["vision_fwd"] = vision_fwd,
+		["vision_left"] = vision_left,
+		["vision_right"] = vision_right,
+		["player_dist"] = player_dist
+	}
+	
+	local success, response = pcall(function()
+		return HttpService:PostAsync(TICK_URL, HttpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson)
+	end)
+	
+	if success then
+		local decoded = HttpService:JSONDecode(response)
+		return decoded.motor, decoded.active_neurons
+	end
+	return nil, nil
+end
+
+task.spawn(function()
+	while task.wait(0.2) do -- 5 ticks a second for sensory processing
+		if not Head then continue end
+		
+		-- Raycast forward (Sensory Vision)
+		local fwdRay = workspace:Raycast(Head.Position, Head.CFrame.LookVector * 10)
+		local vision_fwd = fwdRay and (fwdRay.Position - Head.Position).Magnitude / 10 or 1.0
+		
+		-- Raycast left
+		local leftRay = workspace:Raycast(Head.Position, -Head.CFrame.RightVector * 10)
+		local vision_left = leftRay and (leftRay.Position - Head.Position).Magnitude / 10 or 1.0
+		
+		-- Raycast right
+		local rightRay = workspace:Raycast(Head.Position, Head.CFrame.RightVector * 10)
+		local vision_right = rightRay and (rightRay.Position - Head.Position).Magnitude / 10 or 1.0
+		
+		-- Nearest player dist (Sensory Proximity)
+		local nearestDist = 100
+		for _, player in ipairs(Players:GetPlayers()) do
+			if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+				local dist = (player.Character.HumanoidRootPart.Position - Head.Position).Magnitude
+				if dist < nearestDist then
+					nearestDist = dist
+				end
+			end
+		end
+		local player_dist = nearestDist / 100 -- normalize 0-1
+		
+		-- Send senses to the biological connectome
+		local motor, active_neurons = getFlyBrainTick(vision_fwd, vision_left, vision_right, player_dist)
+		if motor then
+			currentMoveForward = motor.move_forward
+			currentTurnLeft = motor.turn_left
+			currentTurnRight = motor.turn_right
+			
+			-- Render hologram of the active neural pathways
+			pcall(function() renderBrainHologram(active_neurons, Head) end)
+		end
+	end
+end)
+
+RunService.Heartbeat:Connect(function(dt)
+	if not Head or not Head.Anchored then return end
+	
+	-- The neural network uses ReLU, so values are 0 to positive infinity.
+	-- We interpret the raw motor neuron firing rates as physical forces.
+	local turnSpeed = (currentTurnLeft - currentTurnRight) * 3
+	local moveSpeed = currentMoveForward * 5
+	
+	-- Cap maximum biological limits
+	turnSpeed = math.clamp(turnSpeed, -5, 5)
+	moveSpeed = math.clamp(moveSpeed, -2, 10)
+	
+	-- Apply movement (CFrame)
+	Head.CFrame = Head.CFrame * CFrame.Angles(0, math.rad(turnSpeed * 60 * dt), 0)
+	Head.CFrame = Head.CFrame * CFrame.new(0, 0, -moveSpeed * dt)
+	
+	-- Hover logic (keep it bouncing slightly)
+	local currentPos = Head.Position
+	if currentPos.Y < 4 then
+		Head.CFrame = Head.CFrame + Vector3.new(0, (4 - currentPos.Y) * dt, 0)
+	elseif currentPos.Y > 7 then
+		Head.CFrame = Head.CFrame + Vector3.new(0, (7 - currentPos.Y) * dt, 0)
+	end
+end)
