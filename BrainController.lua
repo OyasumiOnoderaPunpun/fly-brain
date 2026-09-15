@@ -28,8 +28,22 @@ if not Head or not Head:IsA("BasePart") then
 	Head.Position = Vector3.new(0, 5, -10)
 	Head.Color = Color3.new(0.2, 0.2, 0.2)
 	Head.Transparency = 1 -- Make the solid block invisible
-	Head.Anchored = true
+	Head.Anchored = false -- Unanchored so it interacts with physics
 	Head.Parent = workspace
+	
+	-- Add Physics Constraints so it can bump into walls without phasing through
+	local attachment = Instance.new("Attachment", Head)
+	local linVel = Instance.new("LinearVelocity", Head)
+	linVel.Attachment0 = attachment
+	linVel.MaxForce = 10000 -- Strong enough to fly, weak enough to bounce off walls
+	linVel.RelativeTo = Enum.ActuatorRelativeTo.Attachment0
+	linVel.VectorVelocity = Vector3.new(0, 0, 0)
+	
+	local angVel = Instance.new("AngularVelocity", Head)
+	angVel.Attachment0 = attachment
+	angVel.MaxTorque = 10000
+	angVel.RelativeTo = Enum.ActuatorRelativeTo.Attachment0
+	angVel.AngularVelocity = Vector3.new(0, 0, 0)
 	
 	-- Create a BillboardGui so the fly always faces the camera like a 2D sprite
 	local billboard = Instance.new("BillboardGui")
@@ -42,6 +56,53 @@ if not Head or not Head:IsA("BasePart") then
 	imageLabel.BackgroundTransparency = 1 -- Transparent background!
 	imageLabel.Image = "rbxthumb://type=Asset&id=1566392136&w=420&h=420"
 	imageLabel.Parent = billboard
+end
+
+-- Create the UI Audit Log for history of replies
+local function createAuditLogUI(player)
+	if player.PlayerGui:FindFirstChild("FlyAuditLog") then return end
+	
+	local sg = Instance.new("ScreenGui")
+	sg.Name = "FlyAuditLog"
+	sg.ResetOnSpawn = false
+	sg.Parent = player.PlayerGui
+	
+	local frame = Instance.new("ScrollingFrame")
+	frame.Size = UDim2.new(0, 300, 0, 200)
+	frame.Position = UDim2.new(1, -320, 1, -220) -- Bottom right corner
+	frame.BackgroundTransparency = 0.5
+	frame.BackgroundColor3 = Color3.new(0,0,0)
+	frame.CanvasSize = UDim2.new(0, 0, 0, 0)
+	frame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	frame.Parent = sg
+	
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = frame
+	layout.Padding = UDim.new(0, 5)
+end
+
+local function appendToAuditLog(text)
+	for _, p in ipairs(Players:GetPlayers()) do
+		local sg = p.PlayerGui:FindFirstChild("FlyAuditLog")
+		if sg then
+			local frame = sg.ScrollingFrame
+			local lbl = Instance.new("TextLabel")
+			lbl.Size = UDim2.new(1, 0, 0, 0)
+			lbl.AutomaticSize = Enum.AutomaticSize.Y
+			lbl.TextWrapped = true
+			lbl.BackgroundTransparency = 1
+			lbl.TextColor3 = Color3.new(1, 1, 1)
+			lbl.TextXAlignment = Enum.TextXAlignment.Left
+			lbl.Text = "[Fly]: " .. text
+			lbl.Parent = frame
+			
+			-- Scroll to bottom
+			task.delay(0.1, function()
+				frame.CanvasPosition = Vector2.new(0, frame.AbsoluteCanvasSize.Y)
+			end)
+		end
+	end
 end
 
 -- Function to ping the Python Brain
@@ -113,6 +174,8 @@ end
 
 -- Listen to chat messages using Player.Chatted (works on Server scripts)
 local function onPlayerAdded(player)
+	createAuditLogUI(player)
+	
 	player.Chatted:Connect(function(message)
 		local character = player.Character
 		if character and character:FindFirstChild("HumanoidRootPart") and Head then
@@ -156,6 +219,8 @@ local function onPlayerAdded(player)
 				pcall(function()
 					game:GetService("Chat"):Chat(Head, filteredAction, Enum.ChatColor.White)
 				end)
+				
+				appendToAuditLog(filteredAction)
 			end
 		end
 	end)
@@ -250,7 +315,7 @@ task.spawn(function()
 end)
 
 RunService.Heartbeat:Connect(function(dt)
-	if not Head or not Head.Anchored then return end
+	if not Head then return end
 	
 	-- The neural network outputs very small raw firing rates initially
 	-- We amplify these significantly to map them to Roblox physics.
@@ -271,13 +336,19 @@ RunService.Heartbeat:Connect(function(dt)
 	moveZ = math.clamp(moveZ, -10, 25)
 	moveY = math.clamp(moveY, -15, 15)
 	
-	-- Apply movement (6DOF CFrame)
-	-- Angles in X (pitch), Y (yaw), Z (roll)
-	Head.CFrame = Head.CFrame * CFrame.Angles(math.rad(pitchSpeed * 60 * dt), math.rad(-yawSpeed * 60 * dt), math.rad(rollSpeed * 60 * dt))
-	Head.CFrame = Head.CFrame * CFrame.new(0, moveY * dt, -moveZ * dt)
+	-- Apply movement (Physics Constraints)
+	-- Instead of teleporting the CFrame, we tell the physics engine how fast it should try to move.
+	-- This allows it to bump into walls and players realistically!
+	local linVel = Head:FindFirstChildOfClass("LinearVelocity")
+	local angVel = Head:FindFirstChildOfClass("AngularVelocity")
 	
-	-- Optional: If the fly hits the ground, don't let it clip through
-	if Head.Position.Y < 1 then
-		Head.CFrame = Head.CFrame - Vector3.new(0, Head.Position.Y - 1, 0)
+	if linVel and angVel then
+		linVel.VectorVelocity = Vector3.new(0, moveY, -moveZ)
+		angVel.AngularVelocity = Vector3.new(math.rad(pitchSpeed * 10), math.rad(-yawSpeed * 10), math.rad(rollSpeed * 10))
+	end
+	
+	-- Optional: If the fly hits the ground, add a slight upward bounce to prevent getting stuck
+	if Head.Position.Y < 1.5 then
+		Head.AssemblyLinearVelocity = Head.AssemblyLinearVelocity + Vector3.new(0, 10 * dt, 0)
 	end
 end)
