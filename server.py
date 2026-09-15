@@ -60,6 +60,10 @@ if not selected_model:
     
 print(f"Using Groq model: {selected_model}")
 
+@app.route('/', methods=['GET'])
+def health_check():
+    return "Bzz (Server is awake)", 200
+
 # Store chat history per player (as a list of message dicts)
 chat_histories = {}
 if os.path.exists("memory.json"):
