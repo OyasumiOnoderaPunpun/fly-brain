@@ -23,6 +23,29 @@ print("Initializing Groq API Client...")
 # This expects the GROQ_API_KEY environment variable to be set
 client = Groq()
 
+import requests
+try:
+    headers = {"Authorization": f"Bearer {os.environ.get('GROQ_API_KEY')}"}
+    resp = requests.get("https://api.groq.com/openai/v1/models", headers=headers)
+    models_data = resp.json()
+    model_ids = [m['id'] for m in models_data.get('data', [])]
+    
+    selected_model = None
+    for m in model_ids:
+        if 'llama' in m.lower():
+            selected_model = m
+            break
+    if not selected_model and len(model_ids) > 0:
+        selected_model = model_ids[0]
+except Exception as e:
+    print("Auto-detect failed:", e)
+    selected_model = "llama-3.3-70b-versatile"
+
+if not selected_model:
+    selected_model = "llama-3.3-70b-versatile"
+    
+print(f"Using Groq model: {selected_model}")
+
 # Store chat history per player (as a list of message dicts)
 chat_histories = {}
 if os.path.exists("memory.json"):
